@@ -29,7 +29,7 @@ It is designed for high concurrency, performance, and low memory usage — makin
 | Config format   | Simple, declarative            | More flexible but complex   |
 | Use cases       | Web server, reverse proxy, LB  | Traditional web server      |
 
-💡 **DevOps Engineers** often choose NGINX for its:
+ **DevOps Engineers** often choose NGINX for its:
 - Lightweight footprint
 - Ease of automation
 - Docker/Kubernetes friendliness
