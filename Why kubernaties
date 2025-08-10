@@ -1,0 +1,64 @@
+Why Use Kubernetes if We Already Have Load Balancers?
+1. Load balancers only handle traffic distribution
+A load balancer can:
+
+Distribute incoming requests between servers.
+
+Do basic health checks.
+
+Terminate SSL.
+
+But it doesn’t manage applications or containers.
+
+If a server crashes or a container fails inside it, the load balancer doesn’t automatically redeploy or scale that app — it just stops sending traffic to the dead node.
+
+2. Kubernetes manages the entire application lifecycle
+Kubernetes does much more than routing:
+
+Scheduling containers onto available nodes.
+
+Auto-scaling applications based on load.
+
+Self-healing — restarts failed Pods automatically.
+
+Rolling updates & rollbacks without downtime.
+
+Service discovery inside the cluster.
+
+3. Kubernetes integrates load balancing into a bigger system
+Inside Kubernetes:
+
+ClusterIP — Internal-only load balancing between Pods.
+
+NodePort — Exposes services on a port on every node.
+
+LoadBalancer — Connects to cloud load balancers.
+
+Ingress Controller — Adds advanced routing for multiple apps using one public IP.
+
+The cloud load balancer is just one part of this routing chain — Kubernetes makes sure apps inside the cluster are reachable, healthy, and scalable.
+
+4. Without Kubernetes
+If you only used cloud load balancers:
+
+You’d have to manually create and destroy VM instances for scaling.
+
+Deployments and updates would be manual and error-prone.
+
+Internal communication between microservices would be harder to manage.
+
+Failures would require manual intervention.
+
+5. With Kubernetes + Load Balancer
+Cloud load balancer:
+
+Public entry point, SSL, DDoS protection.
+
+Kubernetes:
+
+Manages the actual apps behind the load balancer.
+
+Keeps them running, scales them, and updates them.
+
+Provides internal service discovery & traffic routing.
+
