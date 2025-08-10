@@ -1,0 +1,76 @@
+Kubernetes Ingress & Load Balancer – Notes
+Background
+Initially, Kubernetes did not have built-in Ingress support.
+
+Traffic could only enter the cluster through:
+
+NodePort — Exposes a specific port on every node (hard to manage, not internet-friendly).
+
+LoadBalancer — Cloud-provider-specific integration, often required one per service (costly and inefficient).
+
+This created scalability and routing challenges for complex applications.
+
+Solution – Ingress
+Ingress was introduced to provide a centralized entry point into the cluster.
+
+Uses an Ingress Controller (e.g., NGINX, Traefik) to route requests based on rules (host/path matching).
+
+Ingress allows multiple services to share one load balancer using intelligent routing.
+
+Why We Still Use Both Cloud Load Balancer & NGINX Ingress Controller
+Cloud Load Balancer:
+
+Public entry point from the internet.
+
+Can handle SSL termination, DDoS protection, health checks.
+
+Forwards traffic to the NGINX Ingress Controller inside the cluster.
+
+Ensures cluster components are not directly exposed.
+
+NGINX Ingress Controller:
+
+Internal load balancer inside Kubernetes.
+
+Implements Ingress rules for routing:
+
+Example paths:
+
+/services → Services app
+
+/blog → Blog app
+
+/employee-management → Employee app
+
+Routes traffic to Kubernetes Services, which send it to the right Pods.
+
+Traffic Flow
+User → Internet → Cloud Load Balancer (public-facing)
+
+Cloud Load Balancer → Ingress Controller (inside Kubernetes)
+
+Ingress Controller → Kubernetes Service
+
+Service → Pods (application instances)
+
+Benefits
+Single public IP for multiple applications.
+
+Efficient use of cloud load balancers.
+
+Flexible routing without changing service exposure.
+
+More secure (no direct Pod/Node exposure to internet).
+
+Challenges
+NodePort is not ideal for production.
+
+LoadBalancer per service is costly.
+
+Ingress setup requires managing:
+
+Controller deployment
+
+Ingress rules
+
+TLS/SSL configurations
