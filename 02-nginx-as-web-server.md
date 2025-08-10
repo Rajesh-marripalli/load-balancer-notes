@@ -1,12 +1,12 @@
-# 🌐 Section 2: NGINX as a Web Server
+Section 2: NGINX as a Web Server
 
-## 🚀 Goal
+ Goal
 
 Learn how to use NGINX to serve static content such as HTML, CSS, JavaScript, and images — a foundational skill for DevOps and Cloud Engineers.
 
 ---
 
-## 🧠 What is a Web Server?
+ What is a Web Server?
 
 A **web server** is software that serves static files (like `.html`, `.css`, `.js`, `.png`) over HTTP.  
 When users visit your website, the web server responds with these files.
@@ -15,16 +15,19 @@ NGINX is one of the fastest and most popular web servers used for this purpose.
 
 ---
 
-## 📁 Default Web Root in Linux
+ Default Web Root in Linux
 
 | Directory             | Purpose                          |
 |-----------------------|----------------------------------|
-| `/var/www/html`       | Default directory for static files |
-| `/etc/nginx/sites-available/default` | Default config file pointing to the web root |
+/etc/nginx/nginx.conf        Main configuration file
+/etc/nginx/sites-available/  Stores virtual host (server block) configs
+/etc/nginx/sites-enabled/    Symlinks to active site configs
+/var/www/html                Default web root directory
+/var/log/nginx/              Contains access and error logs
 
 ---
 
-## 📝 Anatomy of a Basic `server` Block
+Anatomy of a Basic `server` Block
 
 ```nginx
 server {
@@ -49,75 +52,7 @@ server {
 
 ---
 
-## 🧪 Demo: Serve a Static Website Using NGINX
-
-### 🔧 Option 1: Using Native Linux NGINX
-
-1. Create an HTML file:
-```bash
-echo "<h1>Hello from NGINX Web Server</h1>" | sudo tee /var/www/html/index.html
-```
-
-2. Reload NGINX:
-```bash
-sudo systemctl reload nginx
-```
-
-3. Test:
-Visit: `http://localhost` or your server’s IP in browser.
-
----
-
-### 🐳 Option 2: Serve HTML from Docker
-
-1. Create a project folder:
-```bash
-mkdir nginx-static && cd nginx-static
-```
-
-2. Add `index.html`:
-```html
-<!-- index.html -->
-<h1>Hello from NGINX in Docker!</h1>
-```
-
-3. Run NGINX Docker container:
-```bash
-docker run --name web-nginx -v $PWD:/usr/share/nginx/html:ro -p 8080:80 -d nginx
-```
-
-4. Open in browser:
-```
-http://localhost:8080
-```
-
----
-
-## 🔄 Root vs Alias
-
-These two directives behave differently inside `location` blocks.
-
-### `root` example:
-```nginx
-location /static/ {
-    root /data/www;
-}
-# /static/img.png → /data/www/static/img.png
-```
-
-### `alias` example:
-```nginx
-location /static/ {
-    alias /data/www/;
-}
-# /static/img.png → /data/www/img.png
-```
-
-📌 Use `alias` when you want to replace the URI path.
-
----
-
-## 🧯 Common Errors & Fixes
+## Common Errors & Fixes
 
 | Error                             | Solution                                 |
 |----------------------------------|------------------------------------------|
@@ -128,7 +63,7 @@ location /static/ {
 
 ---
 
-## ✅ Summary
+##  Summary
 
 - NGINX can serve static files efficiently.
 - The `root` and `index` directives define where and what to serve.
