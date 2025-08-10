@@ -1,12 +1,12 @@
-# ⚖️ Section 4: Load Balancing with NGINX (Ubuntu/Linux)
+#  Section 4: Load Balancing with NGINX (Ubuntu/Linux)
 
-## 🎯 Goal
+## Goal
 
 Use NGINX to distribute traffic across multiple backend servers — improving availability, reliability, and scalability of your applications.
 
 ---
 
-## 🧠 What is Load Balancing?
+##  What is Load Balancing?
 
 **Load balancing** is the process of distributing incoming network traffic across multiple backend servers.
 
@@ -19,7 +19,7 @@ NGINX supports multiple load balancing algorithms out of the box.
 
 ---
 
-## 🧮 Load Balancing Algorithms in NGINX
+##  Load Balancing Algorithms in NGINX
 
 | Algorithm         | Behavior                                                               |
 |-------------------|-------------------------------------------------------------------------|
@@ -29,7 +29,7 @@ NGINX supports multiple load balancing algorithms out of the box.
 
 ---
 
-## 📝 Basic Load Balancer Configuration
+##  Basic Load Balancer Configuration
 
 Edit:
 ```bash
@@ -58,7 +58,7 @@ server {
 
 ---
 
-## 🧪 Demo: Load Balance Two Local Backend Servers
+##  Demo: Load Balance Two Local Backend Servers
 
 ### Step 1: Create Backend Servers
 
@@ -113,11 +113,11 @@ Response from Server 1
 Response from Server 2
 ```
 
-✅ You’ve just created a working load balancer using NGINX!
+ You’ve just created a working load balancer using NGINX!
 
 ---
 
-## 🔄 Switching Load Balancing Methods
+##  Switching Load Balancing Methods
 
 ### Use Least Connections
 ```nginx
