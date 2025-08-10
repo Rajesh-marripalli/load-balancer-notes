@@ -18,7 +18,7 @@ NGINX is one of the fastest and most popular web servers used for this purpose.
  Default Web Root in Linux
 
 | Directory             
-|-----------------------|----------------------------------|
+
 /etc/nginx/nginx.conf        Main configuration file
 /etc/nginx/sites-available/  Stores virtual host (server block) configs
 /etc/nginx/sites-enabled/    Symlinks to active site configs
