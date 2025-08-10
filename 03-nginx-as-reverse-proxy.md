@@ -1,6 +1,6 @@
-# 🔁 Section 3: NGINX as a Reverse Proxy (Ubuntu/Linux)
+# Section 3: NGINX as a Reverse Proxy (Ubuntu/Linux)
 
-## 🧠 What is a Reverse Proxy?
+##What is a Reverse Proxy?
 
 A **reverse proxy** is a server that receives client requests and forwards them to backend servers, then sends the response back to the client.
 
@@ -8,7 +8,7 @@ NGINX is one of the most popular tools used as a reverse proxy in production.
 
 ---
 
-## 🔄 Reverse Proxy 
+## Reverse Proxy 
 
  | Reverse Proxy  :                        |
      | Server-side                              |
@@ -18,7 +18,7 @@ NGINX is one of the most popular tools used as a reverse proxy in production.
 
 ---
 
-## 📌 Why Use NGINX as a Reverse Proxy?
+## Why Use NGINX as a Reverse Proxy?
 
 - Protect backend services from direct access
 - Centralized SSL termination
@@ -28,9 +28,9 @@ NGINX is one of the most popular tools used as a reverse proxy in production.
 
 ---
 
-## 📝 Reverse Proxy Configuration (Ubuntu/Linux)
+##  Reverse Proxy Configuration (Ubuntu/Linux)
 
-### 🔧 File: `/etc/nginx/sites-available/default`
+###  File: `/etc/nginx/sites-available/default`
 
 Update the existing `server` block or create a new one:
 
@@ -53,7 +53,7 @@ server {
 
 ---
 
-## 🧪 Demo: Reverse Proxy to a Node.js App
+##  Demo: Reverse Proxy to a Node.js App
 
 ### Step 1: Install Node.js (optional if using your own backend)
 ```bash
@@ -119,11 +119,11 @@ Visit:
 http://localhost
 ```
 
-✅ You should see: `Hello from Node.js backend!`
+ You should see: `Hello from Node.js backend!`
 
 ---
 
-## 📁 File Structure Recap (Ubuntu)
+##  File Structure Recap (Ubuntu)
 
 | Path                              | Purpose                                |
 |-----------------------------------|----------------------------------------|
@@ -134,7 +134,7 @@ http://localhost
 
 ---
 
-## ✅ Summary
+## Summary
 
 - NGINX can proxy traffic to backend apps using `proxy_pass`.
 - Config changes go in `/etc/nginx/sites-available/default` (on Ubuntu).
