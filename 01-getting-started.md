@@ -1,6 +1,6 @@
-# 📘 Section 1: Introduction to NGINX
+# Section 1: Introduction to NGINX
 
-## ✅ What is NGINX?
+## What is NGINX?
 
 **NGINX** is an open-source, high-performance web server that also functions as:
 - A reverse proxy
@@ -18,7 +18,7 @@ It is designed for high concurrency, performance, and low memory usage — makin
 
 ---
 
-## 📊 NGINX vs Apache (Why DevOps Prefer NGINX)
+## NGINX vs Apache (Why DevOps Prefer NGINX)
 
 | Feature         | NGINX                          | Apache                      |
 |-----------------|--------------------------------|-----------------------------|
@@ -36,7 +36,7 @@ It is designed for high concurrency, performance, and low memory usage — makin
 
 ---
 
-## 🧰 Common DevOps Use Cases for NGINX
+##  Common DevOps Use Cases for NGINX
 
 | Use Case                              | Example                                                                 |
 |--------------------------------------|-------------------------------------------------------------------------|
@@ -50,20 +50,14 @@ It is designed for high concurrency, performance, and low memory usage — makin
 
 ---
 
-## 🛠️ Installing NGINX
+##  Installing NGINX
 
-### 🐧 On Ubuntu/Debian
+###  On Ubuntu/Debian
 ```bash
 sudo apt update
 sudo apt install nginx -y
-```
-
-### 📦 On RHEL/CentOS
-```bash
-sudo yum install epel-release -y
-sudo yum install nginx -y
-```
-
+sudo systemctl start nginx
+sudo systemctl enable nginx
 ### 🐳 Using Docker (Recommended for DevOps)
 ```bash
 docker run --name nginx -p 8080:80 -d nginx
@@ -85,7 +79,7 @@ Visit: `http://localhost:8080`
 
 ---
 
-## 🧪 Demo: Run NGINX Using Docker
+## Demo: Run NGINX Using Docker
 
 ### Step 1: Run container
 ```bash
@@ -109,7 +103,7 @@ docker rm nginx-demo
 
 ---
 
-## 🎯 Summary
+##  Summary
 
 - NGINX is a lightweight, high-performance web server and reverse proxy.
 - Widely used in DevOps for load balancing, SSL termination, and as a reverse proxy.
