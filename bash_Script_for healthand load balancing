@@ -1,0 +1,536 @@
+#!/bin/bash
+# Shebang: Specifies that this script should be run using the Bash shell
+
+# --- CONFIGURATION SECTION ---
+# List of Tomcat nodes in the cluster (IP:PORT)
+NODES=("192.168.1.101:8080" "192.168.1.102:8080")
+# Endpoints for health, metrics, session, and database pool checks
+HEALTH_URL="/health"
+METRICS_URL="/metrics"
+SESSION_URL="/session-metrics"
+POOL_URL="/db-metrics"
+# Database connection details
+DB_HOST="localhost"
+DB_PORT="5432"
+DB_USER="afm_user"
+DB_PASS="afm_pass"
+# Path to Tomcat logs for error checking
+TOMCAT_LOGS="/path/to/tomcat/logs/catalina.out"
+# Thresholds for warnings
+MAX_SESSIONS=1000      # Maximum allowed active sessions per node
+MAX_CONNS=50           # Maximum allowed active database connections per node
+MAX_MEMORY=90          # Maximum allowed memory usage (MB) per node
+REFRESH_INTERVAL=10    # How often to refresh the monitor (seconds)
+
+# Clear the terminal screen for a clean output
+clear
+
+# Main monitoring loop: runs indefinitely until stopped
+while true; do
+    # Print header with current timestamp
+    echo "=== AFM Tomcat Cluster Monitor ($(date)) ==="
+    echo
+
+    # Loop through each node in the NODES array
+    for NODE in "${NODES[@]}"; do
+        echo "Node: $NODE"
+        # Extract the IP address from the node (e.g., "192.168.1.101" from "192.168.1.101:8080")
+        NODE_IP=${NODE%%:*}
+
+        # --- TOMCAT PROCESS CHECK ---
+        # Get the PID of the Tomcat process on the remote node
+        TOMCAT_PID=$(ssh $NODE_IP "pgrep -f 'org.apache.catalina.startup.Bootstrap'" 2>/dev/null)
+        if [ -z "$TOMCAT_PID" ]; then
+            # If no PID found, Tomcat is not running
+            echo "  ERROR: Tomcat down"
+            continue  # Skip to the next node
+        else
+            echo "  Tomcat: Running (PID: $TOMCAT_PID)"
+        fi
+
+        # --- HEALTH CHECK ---
+        # Check the HTTP status of the health endpoint
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://$NODE$HEALTH_URL" 2>/dev/null)
+        if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "  Health: OK (Status: $HTTP_STATUS)"
+        else
+            echo "  ERROR: Health check failed (Status: $HTTP_STATUS)"
+        fi
+
+        # --- METRICS CHECK ---
+        # Extract memory and threads metrics from the metrics endpoint
+        MEMORY=$(curl -s "http://$NODE$METRICS_URL" | grep -oP 'Memory: \K\d+' 2>/dev/null)
+        THREADS=$(curl -s "http://$NODE$METRICS_URL" | grep -oP 'Threads: \K\d+' 2>/dev/null)
+        if [ -n "$MEMORY" ]; then
+            # If memory usage exceeds the threshold, show a warning
+            if [ "$MEMORY" -gt "$MAX_MEMORY" ]; then
+                echo "  WARNING: High memory ($MEMORY MB)"
+            else
+                echo "  Memory: $MEMORY MB"
+            fi
+            echo "  Threads: $THREADS"
+        else
+            echo "  Memory/Threads: Unavailable"
+        fi
+
+        # --- SESSION METRICS CHECK ---
+        # Extract active sessions from the session metrics endpoint
+        SESSIONS=$(curl -s "http://$NODE$SESSION_URL" | grep -oP 'Active Sessions: \K\d+' 2>/dev/null)
+        if [ -n "$SESSIONS" ]; then
+            # If active sessions exceed the threshold, show a warning
+            if [ "$SESSIONS" -gt "$MAX_SESSIONS" ]; then
+                echo "  WARNING: High sessions ($SESSIONS)"
+            else
+                echo "  Sessions: $SESSIONS"
+            fi
+        else
+            echo "  Sessions: Unavailable"
+        fi
+
+        # --- DATABASE POOL METRICS CHECK ---
+        # Extract active and idle database connections
+        ACTIVE_CONNS=$(curl -s "http://$NODE$POOL_URL" | grep -oP 'Active: \K\d+' 2>/dev/null)
+        IDLE_CONNS=$(curl -s "http://$NODE$POOL_URL" | grep -oP 'Idle: \K\d+' 2>/dev/null)
+        if [ -n "$ACTIVE_CONNS" ]; then
+            # If active connections exceed the threshold, show a warning
+            if [ "$ACTIVE_CONNS" -gt "$MAX_CONNS" ]; then
+                echo "  WARNING: High DB connections ($ACTIVE_CONNS active, $IDLE_CONNS idle)"
+            else
+                echo "  DB Connections: $ACTIVE_CONNS active, $IDLE_CONNS idle"
+            fi
+        else
+            echo "  DB Connections: Unavailable"
+        fi
+
+        # --- LOG ERROR CHECK ---
+        # Count ERROR lines in Tomcat logs
+        ERROR_COUNT=$(ssh $NODE_IP "grep -c 'ERROR' $TOMCAT_LOGS" 2>/dev/null)
+        if [ "$ERROR_COUNT" -gt 0 ]; then
+            # If errors found, show the count and the last 2 error lines
+            echo "  WARNING: $ERROR_COUNT log errors"
+            ssh $NODE_IP "grep 'ERROR' $TOMCAT_LOGS | tail -2" 2>/dev/null
+        else
+            echo "  Logs: No errors"
+        fi
+
+        # --- SESSION REPLICATION CHECK ---
+        # Check for recent session creation activity in logs
+        SESSION_LOG=$(ssh $NODE_IP "grep 'Session created' $TOMCAT_LOGS | tail -1" 2>/dev/null)
+        if [ -n "$SESSION_LOG" ]; then
+            echo "  Session Replication: Active ($SESSION_LOG)"
+        else
+            echo "  Session Replication: No recent activity"
+        fi
+        echo
+    done
+
+    # --- DATABASE CONNECTIVITY CHECK ---
+    # Check if the database is reachable
+    if pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER -q 2>/dev/null; then
+        echo "Database: OK ($DB_HOST:$DB_PORT)"
+    else
+        echo "ERROR: Database unreachable ($DB_HOST:$DB_PORT)"
+    fi
+
+    # --- CLUSTER SESSION SUMMARY ---
+    # Sum active sessions across all nodes
+    TOTAL_SESSIONS=0
+    for NODE in "${NODES[@]}"; do
+        SESSIONS=$(curl -s "http://$NODE$SESSION_URL" | grep -oP 'Active Sessions: \K\d+' 2>/dev/null)
+        TOTAL_SESSIONS=$((TOTAL_SESSIONS + (SESSIONS || 0)))
+    done
+    # If total sessions exceed the cluster threshold, show a warning
+    if [ "$TOTAL_SESSIONS" -gt "$((MAX_SESSIONS * ${#NODES[@]}))" ]; then
+        echo "WARNING: Cluster total sessions too high ($TOTAL_SESSIONS)"
+    else
+        echo "Cluster Sessions: $TOTAL_SESSIONS"
+    fi
+
+    # --- REFRESH AND CLEAR ---
+    # Print instructions and wait before refreshing
+    echo "=== Press Ctrl+C to stop, refreshing in $REFRESH_INTERVAL seconds ==="
+    sleep $REFRESH_INTERVAL
+    clear
+done
+
+
+
+
+
+<servlet>
+    <servlet-name>HealthCheckServlet</servlet-name>
+    <servlet-class>com.aithent.servlet.HealthCheckServlet</servlet-class>
+</servlet>
+<servlet-mapping>
+    <servlet-name>HealthCheckServlet</servlet-name>
+    <url-pattern>/health</url-pattern>
+</servlet-mapping>
+
+
+
+
+
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.sql.DataSource;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.SQLException;
+
+public class HealthCheckServlet extends HttpServlet {
+    private DataSource dataSource;
+
+    @Override
+    public void init() {
+        try {
+            javax.naming.Context ctx = new javax.naming.InitialContext();
+            dataSource = (DataSource) ctx.lookup("java:comp/env/jdbc/AFMDataSource");
+        } catch (Exception e) {
+            log("Failed to init DataSource: " + e.getMessage());
+        }
+    }
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        if (checkHealth()) {
+            resp.setStatus(200);
+            resp.getWriter().write("OK");
+        } else {
+            resp.setStatus(503);
+            resp.getWriter().write("UNHEALTHY");
+        }
+    }
+
+    private boolean checkHealth() {
+        try (Connection conn = dataSource.getConnection()) {
+            if (!conn.isValid(2)) return false;
+        } catch (SQLException e) {
+            log("DB health check failed: " + e.getMessage());
+            return false;
+        }
+        Runtime rt = Runtime.getRuntime();
+        long usedMemory = rt.totalMemory() - rt.freeMemory();
+        return (usedMemory * 100.0 / rt.maxMemory()) <= 90;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+<filter>
+    <filter-name>SessionSerializationFilter</filter-name>
+    <filter-class>com.aithent.filter.SessionSerializationFilter</filter-class>
+</filter>
+<filter-mapping>
+    <filter-name>SessionSerializationFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+</filter-mapping>
+
+
+
+
+
+import javax.servlet.*;
+import javax.servlet.http.HttpServletRequest;
+
+public class SessionSerializationFilter implements Filter {
+    public void init(FilterConfig config) {}
+
+    public void doFilter(ServletRequest req, ServletResponse resp, FilterChain chain) throws IOException, ServletException {
+        HttpServletRequest request = (HttpServletRequest) req;
+        HttpSession session = request.getSession();
+        chain.doFilter(new ServletRequestWrapper(request) {
+            @Override
+            public HttpSession getSession(boolean create) {
+                return new HttpSessionWrapper(session) {
+                    @Override
+                    public void setAttribute(String name, Object value) {
+                        SessionUtil.setAttribute(session, name, value);
+                    }
+                    @Override
+                    public Object getAttribute(String name) {
+                        return SessionUtil.getAttribute(session, name);
+                    }
+                };
+            }
+        }, resp);
+    }
+
+    public void destroy() {}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<listener>
+    <listener-class>com.aithent.listener.SerializableSessionListener</listener-class>
+</listener>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+public class SessionUtil {
+    public static void setAttribute(HttpSession session, String name, Object value) {
+        SerializableSessionWrapper wrapper = (SerializableSessionWrapper) session.getAttribute("serializableWrapper");
+        if (wrapper != null) {
+            wrapper.setAttribute(name, value);
+        } else {
+            session.setAttribute(name, value); // Fallback
+        }
+    }
+
+    public static Object getAttribute(HttpSession session, String name) {
+        SerializableSessionWrapper wrapper = (SerializableSessionWrapper) session.getAttribute("serializableWrapper");
+        return wrapper != null ? wrapper.getAttribute(name) : session.getAttribute(name);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+import javax.servlet.http.HttpSessionListener;
+import javax.servlet.http.HttpSessionEvent;
+import javax.servlet.http.HttpSession;
+import javax.servlet.http.HttpSessionBindingListener;
+import javax.servlet.http.HttpSessionBindingEvent;
+import java.io.Serializable;
+import org.json.JSONObject; // Adjust for ATG JSON library
+
+public class SerializableSessionListener implements HttpSessionListener {
+    @Override
+    public void sessionCreated(HttpSessionEvent se) {
+        HttpSession session = se.getSession();
+        session.setAttribute("serializableWrapper", new SerializableSessionWrapper(session));
+    }
+
+    @Override
+    public void sessionDestroyed(HttpSessionEvent se) {
+        // Cleanup if needed
+    }
+
+    private static class SerializableSessionWrapper implements HttpSessionBindingListener, Serializable {
+        private static final long serialVersionUID = 1L;
+        private transient HttpSession session;
+
+        public SerializableSessionWrapper(HttpSession session) {
+            this.session = session;
+        }
+
+        @Override
+        public void valueBound(HttpSessionBindingEvent event) {
+            // Called when added to session
+        }
+
+        @Override
+        public void valueUnbound(HttpSessionBindingEvent event) {
+            // Cleanup if needed
+        }
+
+        // Intercept session attribute changes
+        public void setAttribute(String name, Object value) {
+            if (value != null && !(value instanceof Serializable)) {
+                if (value instanceof JSONObject) {
+                    session.setAttribute(name, new JsonWrapper((JSONObject) value));
+                } else {
+                    session.setAttribute(name, value.toString()); // Fallback
+                }
+            } else {
+                session.setAttribute(name, value);
+            }
+        }
+
+        public Object getAttribute(String name) {
+            Object value = session.getAttribute(name);
+            if (value instanceof JsonWrapper) {
+                try {
+                    return ((JsonWrapper) value).getJson();
+                } catch (Exception e) {
+                    session.getServletContext().log("Failed to unwrap JSON: " + e.getMessage());
+                }
+            }
+            return value;
+        }
+    }
+
+    private static class JsonWrapper implements Serializable {
+        private static final long serialVersionUID = 1L;
+        private String jsonString;
+
+        public JsonWrapper(JSONObject json) {
+            this.jsonString = json.toString();
+        }
+
+        public JSONObject getJson() throws JSONException {
+            return new JSONObject(jsonString);
+        }
+    }
+}
+
+
+
+
+
+<web-app ...>
+  <distributable/>
+</web-app>
+
+
+
+
+<Engine name="Catalina" defaultHost="localhost" jvmRoute="tomcat2">
+  <Cluster className="org.apache.catalina.ha.tcp.SimpleTcpCluster"/>
+  ...
+</Engine>
+
+
+
+
+
+
+<Proxy balancer://tomcatcluster>
+    BalancerMember http://192.168.1.101:8080 route=tomcat1 hcmethod=GET hcuri=/health hcinterval=10 hcpasses=2 hcfails=3
+    BalancerMember http://192.168.1.102:8080 route=tomcat2 hcmethod=GET hcuri=/health hcinterval=10 hcpasses=2 hcfails=3
+    ProxySet lbmethod=byrequests
+    ProxySet stickysession=JSESSIONID
+</Proxy>
+
+
+
+
+#!/bin/bash
+
+# Config
+NODES=("192.168.1.101:8080" "192.168.1.102:8080")
+HEALTH_URL="/health"
+SESSION_URL="/session-metrics"
+TOMCAT_LOGS="/path/to/tomcat/logs/catalina.out"
+MAX_SESSIONS=1000
+REFRESH_INTERVAL=10
+
+# Clear terminal
+clear
+
+while true; do
+    echo "=== AFM Session Replication Monitor ($(date)) ==="
+    echo
+
+    for NODE in "${NODES[@]}"; do
+        echo "Node: $NODE"
+        NODE_IP=${NODE%%:*}
+
+        # Tomcat process
+        TOMCAT_PID=$(ssh $NODE_IP "pgrep -f 'org.apache.catalina.startup.Bootstrap'" 2>/dev/null)
+        if [ -z "$TOMCAT_PID" ]; then
+            echo "  ERROR: Tomcat down"
+            continue
+        else
+            echo "  Tomcat: Running (PID: $TOMCAT_PID)"
+        fi
+
+        # HealthCheckServlet
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://$NODE$HEALTH_URL" 2>/dev/null)
+        if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "  Health: OK (Status: $HTTP_STATUS)"
+        else
+            echo "  ERROR: Health check failed (Status: $HTTP_STATUS)"
+        fi
+
+        # SessionMetricController
+        SESSIONS=$(curl -s "http://$NODE$SESSION_URL" | grep -oP 'Active Sessions: \K\d+' 2>/dev/null)
+        if [ -n "$SESSIONS" ]; then
+            if [ "$SESSIONS" -gt "$MAX_SESSIONS" ]; then
+                echo "  WARNING: High sessions ($SESSIONS)"
+            else
+                echo "  Sessions: $SESSIONS"
+            fi
+        else
+            echo "  Sessions: Unavailable"
+        fi
+
+        # Session Replication Check
+        REPLICATION_LOG=$(ssh $NODE_IP "grep -E 'Session (created|replicated)' $TOMCAT_LOGS | tail -1" 2>/dev/null)
+        if [ -n "$REPLICATION_LOG" ]; then
+            echo "  Session Replication: Active ($REPLICATION_LOG)"
+        else
+            echo "  Session Replication: No recent activity"
+        fi
+
+        # Serialization Errors
+        SERIALIZATION_ERROR=$(ssh $NODE_IP "grep 'NotSerializableException' $TOMCAT_LOGS | tail -1" 2>/dev/null)
+        if [ -n "$SERIALIZATION_ERROR" ]; then
+            echo "  ERROR: Serialization issue ($SERIALIZATION_ERROR)"
+        else
+            echo "  Serialization: No errors"
+        fi
+        echo
+    done
+
+    # Cluster session summary
+    TOTAL_SESSIONS=0
+    ACTIVE_NODES=0
+    for NODE in "${NODES[@]}"; do
+        SESSIONS=$(curl -s "http://$NODE$SESSION_URL" | grep -oP 'Active Sessions: \K\d+' 2>/dev/null)
+        TOTAL_SESSIONS=$((TOTAL_SESSIONS + (SESSIONS || 0)))
+        if curl -s "http://$NODE$HEALTH_URL" >/dev/null 2>&1; then
+            ACTIVE_NODES=$((ACTIVE_NODES + 1))
+        fi
+    done
+    if [ "$TOTAL_SESSIONS" -gt "$((MAX_SESSIONS * ACTIVE_NODES))" ]; then
+        echo "WARNING: Cluster total sessions too high ($TOTAL_SESSIONS)"
+    else
+        echo "Cluster Sessions: $TOTAL_SESSIONS (Active Nodes: $ACTIVE_NODES)"
+    fi
+
+    echo "=== Press Ctrl+C to stop, refreshing in $REFRESH_INTERVAL seconds ==="
+    sleep $REFRESH_INTERVAL
+    clear
+done
