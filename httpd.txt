@@ -1,0 +1,590 @@
+# ==================================================================
+# PRODUCTION-READY APACHE LOAD BALANCER CONFIGURATION
+# ==================================================================
+
+# What: Sets the base directory for Apache's installation (modules, configs, logs)
+# Why: Defines root path for relative references; customized for Windows install
+# When: Used at server startup to locate files
+ServerRoot "D:/Software/ApacheHttpd/Apache24"
+
+# What: Specifies file to store Apache's process ID
+# Why: Enables management tools to stop/restart server (e.g., taskkill on Windows)
+# When: Written at startup; read during shutdown/restart
+PidFile logs/httpd.pid
+
+# What: Sets timeout (seconds) for reading/writing during requests
+# Why: Prevents hung connections from consuming resources; 60s balances reliability
+# When: Applied if client or backend delays (e.g., slow uploads)
+Timeout 60
+
+# What: Enables HTTP Keep-Alive for persistent connections
+# Why: Reduces TCP overhead, improving performance for multiple requests
+# When: Used for HTTP/1.1 clients; speeds up client interactions
+KeepAlive On
+
+# What: Limits requests per persistent connection
+# Why: Prevents clients from hogging connections; 100 is safe for most apps
+# When: Enforced after each request on a kept-alive connection
+MaxKeepAliveRequests 100
+
+# What: Time (seconds) to wait for new request before closing connection
+# Why: Frees resources quickly; 5s suits high-traffic sites
+# When: Timer starts after response; closes if no new request
+KeepAliveTimeout 5
+
+# What: Loads WinNT MPM for Windows (single process, multi-threaded)
+# Why: Optimizes Apache for Windows; required for thread-based concurrency
+# When: Loaded at startup; governs request handling
+LoadModule mpm_winnt_module modules/mod_mpm_winnt.so
+<IfModule mpm_winnt_module>
+    # What: Sets threads per process (150)
+    # Why: Balances concurrency with resource use; suitable for moderate load
+    # When: Defines thread pool at startup
+    ThreadsPerChild 150
+    # What: Caps total concurrent requests (8000)
+    # Why: Handles high traffic; prevents overload on busy load balancer
+    # When: Limits active threads during runtime
+    MaxRequestWorkers 8000
+    # What: Sets max threads per process (64)
+    # Why: Prevents excessive thread creation; aligns with system limits
+    # When: Enforced at startup; caps thread scaling
+    ThreadLimit 64
+</IfModule>
+
+# What: Loads core authorization module
+# Why: Enables access control (e.g., Require directives) for security
+# When: Used for every request to check permissions
+LoadModule authz_core_module modules/mod_authz_core.so
+
+# What: Loads directory handling module
+# Why: Manages directory requests (e.g., index.html for /)
+# When: Triggered on directory URLs without specific files
+LoadModule dir_module modules/mod_dir.so
+
+# What: Loads MIME type handling module
+# Why: Sets Content-Type headers for correct browser rendering
+# When: Applied when serving files or proxied responses
+LoadModule mime_module modules/mod_mime.so
+
+# What: Loads URL rewriting module
+# Why: Enables redirects (e.g., HTTP to HTTPS) and proxy rules
+# When: Evaluated per request if RewriteEngine is on
+LoadModule rewrite_module modules/mod_rewrite.so
+
+# What: Loads core proxy module
+# Why: Enables reverse proxying to backend servers
+# When: Used for ProxyPass and balancer directives
+LoadModule proxy_module modules/mod_proxy.so
+
+# What: Loads HTTP protocol support for proxy
+# Why: Required for proxying HTTP requests to backends
+# When: Used for HTTP-based balancer members
+LoadModule proxy_http_module modules/mod_proxy_http.so
+
+# What: Loads load balancer module
+# Why: Groups backend servers for load distribution
+# When: Used in <Proxy balancer://> blocks
+LoadModule proxy_balancer_module modules/mod_proxy_balancer.so
+
+# What: Loads round-robin load balancing method
+# Why: Distributes requests evenly by count
+# When: Applied when lbmethod=byrequests in ProxySet
+LoadModule lbmethod_byrequests_module modules/mod_lbmethod_byrequests.so
+
+# What: Loads traffic-based load balancing method
+# Why: Distributes based on bytes sent; useful for uneven workloads
+# When: Applied when lbmethod=bytraffic (e.g., db-cluster)
+LoadModule lbmethod_bytraffic_module modules/mod_lbmethod_bytraffic.so
+
+# What: Loads heartbeat-based load balancing
+# Why: Uses health checks to route to healthy servers
+# When: Optional; used if lbmethod=heartbeat
+LoadModule lbmethod_heartbeat_module modules/mod_lbmethod_heartbeat.so
+
+# What: Loads SSL/TLS module for HTTPS
+# Why: Enables secure connections for production
+# When: Used for Listen 443 ssl and SSLEngine on
+LoadModule ssl_module modules/mod_ssl.so
+
+# What: Loads module for manipulating HTTP headers
+# Why: Adds/removes security headers (e.g., X-Frame-Options)
+# When: Applied to all responses for security
+LoadModule headers_module modules/mod_headers.so
+
+# What: Loads ModSecurity (Web Application Firewall)
+# Why: Blocks malicious requests (e.g., SQL injection, XSS)
+# When: If uncommented, inspects all requests/responses
+# LoadModule security2_module modules/mod_security2.so
+
+# What: Loads server status module
+# Why: Provides metrics (e.g., active connections) for monitoring
+# When: Accessed via /server-status (restricted)
+LoadModule status_module modules/mod_status.so
+
+# What: Loads server info module
+# Why: Displays config details for debugging
+# When: Accessed via /server-info (restricted)
+LoadModule info_module modules/mod_info.so
+
+# ==================================================================
+# BASIC SERVER SETTINGS
+# ==================================================================
+
+# What: Binds server to ports 80 (HTTP) and 443 (HTTPS)
+# Why: Standard ports for web traffic; HTTPS for security
+# When: Listens at startup for incoming connections
+Listen 80
+Listen 443 ssl
+
+# What: Limits Server header to minimal info (e.g., "Apache")
+# Why: Hides version details to reduce attack surface
+# When: Applied to all responses
+ServerTokens Prod
+
+# What: Disables server signature in error pages
+# Why: Prevents leaking version or OS info
+# When: On error pages or directory listings
+ServerSignature Off
+
+# What: Sets default directory for serving files
+# Why: Fallback for requests not matching VirtualHosts
+# When: Used if no specific VirtualHost or Alias matches
+DocumentRoot "D:/Software/ApacheHttpd/Apache24/htdocs"
+
+# What: Secures root filesystem; denies all access
+# Why: Prevents serving sensitive files outside DocumentRoot
+# When: For requests mapping to / (root)
+<Directory />
+    AllowOverride none
+    Require all denied
+</Directory>
+
+# What: Configures DocumentRoot directory
+# Why: Disables indexes (no dir listings) and symlinks (security); allows all access
+# When: For requests to htdocs; serves static files if not proxied
+<Directory "D:/Software/ApacheHttpd/Apache24/htdocs">
+    Options -Indexes -FollowSymLinks
+    AllowOverride None
+    Require all granted
+</Directory>
+
+# What: Specifies MIME types config file
+# Why: Defines Content-Type mappings for files
+# When: Loaded at startup; used when serving content
+TypesConfig conf/mime.types
+
+# ==================================================================
+# SECURITY CONFIGURATION
+# ==================================================================
+
+# What: Removes Server header from responses
+# Why: Hides Apache version to prevent targeted exploits
+# When: Applied to every response (HTTP/HTTPS)
+Header always unset Server
+
+# What: Removes X-Powered-By header (if set)
+# Why: Hides backend tech (e.g., PHP, Java) from attackers
+# When: Applied to all responses; safe if header absent
+Header unset X-Powered-By
+
+# What: Prevents MIME sniffing by browsers
+# Why: Stops malicious files (e.g., script as image) from executing
+# When: Added to all responses; protects /static and proxied content
+Header always set X-Content-Type-Options nosniff
+
+# What: Blocks framing by external domains
+# Why: Prevents clickjacking attacks on app pages
+# When: Added to all responses; protects /load, /api
+Header always set X-Frame-Options SAMEORIGIN
+
+# What: Enables browser XSS filter (blocks page if detected)
+# Why: Fallback for older browsers against XSS; less relevant in 2025
+# When: Added to all responses; affects legacy clients
+Header always set X-XSS-Protection "1; mode=block"
+
+# What: Limits referrer info for cross-origin requests
+# Why: Protects sensitive URL data (e.g., /api?token=xyz)
+# When: Added to all responses; used on cross-origin navigation
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+# What: Denies access to .ht* files (e.g., .htaccess)
+# Why: Prevents exposure of sensitive config files
+# When: On requests for matching files in any directory
+<Files ".ht*">
+    Require all denied
+</Files>
+
+# What: Disables HTTP TRACE method
+# Why: Prevents Cross-Site Tracing (XST) attacks
+# When: Rejects any TRACE request to the server
+TraceEnable off
+
+# ==================================================================
+# LOGGING CONFIGURATION
+# ==================================================================
+
+# What: Sets logging level to warn (errors, warnings)
+# Why: Balances detail for debugging without verbosity
+# When: Logs issues during runtime (e.g., proxy errors)
+LogLevel warn
+
+# What: Specifies error log file
+# Why: Centralizes error tracking for troubleshooting
+# When: Written on errors or warnings
+ErrorLog logs/error.log
+
+# What: Defines custom log format with balancer info
+# Why: Tracks client, request, response, and backend route for auditing
+# When: Used in CustomLog for all requests
+LogFormat "%h %l %u %t \"%r\" %>s %O \"%{Referer}i\" \"%{User-Agent}i\" %D %{BALANCER_WORKER_ROUTE}e" combined_balancer
+
+# What: Simpler format with response time
+# Why: Alternative for basic logging; not used here
+# When: Available for CustomLog if needed
+LogFormat "%h %l %u %t \"%r\" %>s %O %D" common_timed
+
+# What: Logs all access to access.log with balancer format
+# Why: Comprehensive audit of all traffic, including backend routes
+# When: Written for every request
+CustomLog logs/access.log combined_balancer
+
+# What: Separate log for balancer-routed requests
+# Why: Isolates proxy traffic for monitoring backend usage
+# When: Written only for requests routed via balancer
+CustomLog logs/balancer.log "%t [%{BALANCER_WORKER_ROUTE}e] %h \"%r\" %>s %D" env=BALANCER_WORKER_ROUTE
+
+# ==================================================================
+# LOAD BALANCER CONFIGURATION
+# ==================================================================
+
+# What: Defines app-cluster balancer with three primary servers
+# Why: Distributes load to backends; standby for failover
+# When: Used for ProxyPass to app-cluster; health checks every 10s
+<Proxy "balancer://app-cluster">
+    # What: Primary backend server; route ID, retry after 30s, 5s timeout, 3s connect timeout, 10s ping, equal load
+    # Why: Routes traffic to healthy server; parameters optimize reliability
+    # When: Handles requests unless failed; pings for health
+    BalancerMember http://10.0.1.10:8080 route=app-server-1 retry=30 timeout=5 connectiontimeout=3 ping=10 loadfactor=100
+    BalancerMember http://10.0.1.11:8080 route=app-server-2 retry=30 timeout=5 connectiontimeout=3 ping=10 loadfactor=100
+    BalancerMember http://10.0.1.12:8080 route=app-server-3 retry=30 timeout=5 connectiontimeout=3 ping=10 loadfactor=100
+    # What: Standby server; used only if primaries fail
+    # Why: Ensures availability; lower load factor for backup role
+    # When: Activated on primary failure; longer retry (60s)
+    BalancerMember http://10.0.1.13:8080 route=app-server-standby status=+H retry=60 timeout=10 loadfactor=50
+    # What: Sets round-robin balancing
+    # Why: Evenly distributes requests; simple and effective
+    # When: Determines request routing to members
+    ProxySet lbmethod=byrequests
+    # What: Enables sticky sessions via JSESSIONID
+    # Why: Ensures user sessions stay with one backend
+    # When: Routes requests based on session cookie
+    ProxySet stickysession=JSESSIONID
+    # What: Sets health check method to GET
+    # Why: Checks backend health via HTTP GET
+    # When: Performed every ping interval (10s)
+    ProxySet hcmethod=GET
+    # What: Specifies health check URL
+    # Why: Ensures backends are healthy before routing
+    # When: GET /health sent to each member
+    ProxySet hcuri=/health
+</Proxy>
+
+# What: Defines DB cluster balancer (likely misconfigured; HTTP to 3306?)
+# Why: Optional for DB connection pooling via HTTP; standby slaves
+# When: Used if ProxyPass to db-cluster; not active here
+<Proxy "balancer://db-cluster">
+    BalancerMember http://10.0.2.10:3306 route=db-master retry=60 timeout=10 loadfactor=100
+    BalancerMember http://10.0.2.11:3306 route=db-slave-1 status=+H retry=60 timeout=10 loadfactor=75
+    BalancerMember http://10.0.2.12:3306 route=db-slave-2 status=+H retry=60 timeout=10 loadfactor=75
+    ProxySet lbmethod=bytraffic
+</Proxy>
+
+# What: Sets global proxy timeout (10s)
+# Why: Fails fast on slow backends
+# When: For all proxy requests
+ProxyTimeout 10
+
+# What: Preserves original Host header
+# Why: Ensures backends see correct domain (your-domain.com)
+# When: For all proxied requests
+ProxyPreserveHost On
+
+# What: Disables forward proxy
+# Why: Security; prevents open proxy abuse
+# When: Blocks non-reverse proxy requests
+ProxyRequests Off
+
+# What: Excludes static file extensions from proxying
+# Why: Serves statics directly for efficiency
+# When: On requests for matching file types
+ProxyPassMatch ^/(.*)\.(js|css|png|jpg|jpeg|gif|ico|svg)$ !
+
+# What: Excludes /static path from proxying
+# Why: Serves static content locally, bypassing balancer
+# When: On requests to /static
+ProxyPass /static !
+
+# ==================================================================
+# HTTP VIRTUAL HOST (Redirect to HTTPS)
+# ==================================================================
+
+# What: Defines HTTP host for port 80
+# Why: Handles HTTP traffic; redirects to HTTPS
+# When: For all requests on port 80
+<VirtualHost *:80>
+    ServerName your-domain.com
+    ServerAlias www.your-domain.com
+    # What: Enables URL rewriting
+    # Why: Needed for HTTP-to-HTTPS redirect
+    # When: Evaluates rules per request
+    RewriteEngine On
+    # What: Checks if request is not HTTPS
+    # Why: Triggers redirect to secure protocol
+    # When: For non-HTTPS requests
+    RewriteCond %{HTTPS} off
+    # What: Redirects to HTTPS with 301 (permanent)
+    # Why: Forces secure connections; 301 caches redirect
+    # When: On matching condition; L stops further rules
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+    # What: Proxies health check to app-cluster
+    # Why: Allows HTTP health checks for external monitors
+    # When: On /health-check requests
+    ProxyPass /health-check balancer://app-cluster/health
+    ProxyPassReverse /health-check balancer://app-cluster/health
+</VirtualHost>
+
+# ==================================================================
+# HTTPS VIRTUAL HOST (Main Application)
+# ==================================================================
+
+# What: Defines HTTPS host for port 443
+# Why: Handles secure traffic; main entry for app
+# When: For all requests on port 443
+<VirtualHost *:443>
+    ServerName your-domain.com
+    ServerAlias www.your-domain.com
+    # What: Enables SSL/TLS
+    # Why: Secures connections with HTTPS
+    # When: For all requests in this VirtualHost
+    SSLEngine on
+    # What: Specifies SSL certificate, key, and chain
+    # Why: Authenticates server; enables encryption
+    # When: Loaded at startup; used for HTTPS handshake
+    SSLCertificateFile conf/ssl/your-domain.com.crt
+    SSLCertificateKeyFile conf/ssl/your-domain.com.key
+    SSLCertificateChainFile conf/ssl/intermediate.crt
+    # What: Enables modern TLS protocols (1.2, 1.3)
+    # Why: Ensures secure, up-to-date encryption
+    # When: During SSL handshake
+    SSLProtocol -all +TLSv1.2 +TLSv1.3
+    # What: Defines secure cipher suites
+    # Why: Uses strong encryption (e.g., AES-GCM, CHACHA20)
+    # When: Negotiated during SSL handshake
+    SSLCipherSuite ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+    # What: Lets client choose cipher
+    # Why: Balances security with compatibility
+    # When: During SSL handshake
+    SSLHonorCipherOrder off
+    # What: Disables session tickets
+    # Why: Improves security (prevents session reuse)
+    # When: During SSL session setup
+    SSLSessionTickets off
+    # What: Enables OCSP stapling
+    # Why: Speeds up cert validation; reduces client queries
+    # When: During SSL handshake
+    SSLUseStapling on
+    # What: Sets stapling cache
+    # Why: Stores OCSP responses; 32KB is sufficient
+    # When: For stapling responses
+    SSLStaplingCache "shmcb:logs/ssl_stapling(32768)"
+    # What: Enforces HTTPS for 1 year, including subdomains
+    # Why: Prevents downgrade attacks; preload for browser lists
+    # When: Added to all HTTPS responses
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    # What: Proxies /load path to app-cluster
+    # Why: Routes main app traffic to backends
+    # When: On /load requests
+    ProxyPass /load balancer://app-cluster/load/load
+    ProxyPassReverse /load balancer://app-cluster/load/load
+    # What: Proxies /api path to app-cluster
+    # Why: Routes API requests to backends
+    # When: On /api requests
+    ProxyPass /api balancer://app-cluster/api
+    ProxyPassReverse /api balancer://app-cluster/api
+    # What: Serves /static from local directory
+    # Why: Bypasses balancer for static files; improves performance
+    # When: On /static requests
+    Alias /static "D:/webapp/static"
+    <Directory "D:/webapp/static">
+        Require all granted
+        # What: Enables caching headers
+        # Why: Reduces client requests via browser caching
+        # When: For static file responses
+        ExpiresActive On
+        ExpiresDefault "access plus 1 month"
+    </Directory>
+    # What: Proxies health check to app-cluster
+    # Why: Allows backend health monitoring
+    # When: On /health requests
+    ProxyPass /health balancer://app-cluster/health
+    ProxyPassReverse /health balancer://app-cluster/health
+    # What: Proxies WebSocket requests
+    # Why: Supports real-time apps (e.g., chat)
+    # When: On /ws requests
+    ProxyPass /ws balancer://app-cluster/ws
+    ProxyPassReverse /ws balancer://app-cluster/ws
+    # What: Rewrites WebSocket requests
+    # Why: Upgrades HTTP to WebSocket protocol
+    # When: On requests with WebSocket headers
+    RewriteEngine on
+    RewriteCond %{HTTP:UPGRADE} ^WebSocket$ [NC]
+    RewriteCond %{HTTP:CONNECTION} Upgrade$ [NC]
+    RewriteRule .* ws://backend%{REQUEST_URI} [P]
+    # What: Custom error pages for proxy failures
+    # Why: User-friendly errors for backend issues
+    # When: On 502, 503, 504 status codes
+    ErrorDocument 502 /error/502.html
+    ErrorDocument 503 /error/503.html
+    ErrorDocument 504 /error/504.html
+</VirtualHost>
+
+# ==================================================================
+# MONITORING AND MANAGEMENT
+# ==================================================================
+
+# What: Enables balancer management interface
+# Why: Allows admin to enable/disable backend servers
+# When: Accessed at /balancer-manager from allowed IPs
+<Location "/balancer-manager">
+    SetHandler balancer-manager
+    Require ip 10.0.0.0/8
+    Require ip 192.168.0.0/16
+    Require local
+</Location>
+
+# What: Enables server status metrics
+# Why: Monitors connections, traffic for ops
+# When: Accessed at /server-status from allowed IPs
+<Location "/server-status">
+    SetHandler server-status
+    Require ip 10.0.0.0/8
+    Require local
+</Location>
+
+# What: Enables server config info
+# Why: Debugging aid for admin
+# When: Accessed at /server-info from allowed IPs
+<Location "/server-info">
+    SetHandler server-info
+    Require ip 10.0.0.0/8
+    Require local
+</Location>
+
+# ==================================================================
+# PERFORMANCE OPTIMIZATION
+# ==================================================================
+
+# What: Loads compression module
+# Why: Reduces bandwidth for text-based responses
+# When: Applied to compressible content
+LoadModule deflate_module modules/mod_deflate.so
+<IfModule mod_deflate.c>
+    <Location />
+        # What: Enables compression
+        # Why: Speeds up page loads; saves bandwidth
+        # When: For non-excluded responses
+        SetOutputFilter DEFLATE
+        # What: Excludes images from compression
+        # Why: Images are already compressed; saves CPU
+        # When: On matching URIs
+        SetEnvIfNoCase Request_URI \.(?:gif|jpe?g|png)$ no-gzip dont-vary
+        # What: Excludes compressed file types
+        # Why: Avoids double compression; saves CPU
+        # When: On matching URIs
+        SetEnvIfNoCase Request_URI \.(?:exe|t?gz|zip|bz2|sit|rar)$ no-gzip dont-vary
+    </Location>
+</IfModule>
+
+# What: Loads caching module
+# Why: Enables browser caching for static assets
+# When: For specified MIME types
+LoadModule expires_module modules/mod_expires.so
+<IfModule mod_expires.c>
+    # What: Activates Expires headers
+    # Why: Reduces repeat requests via caching
+    # When: For matching MIME types
+    ExpiresActive On
+    # What: Sets 1-month cache for images, CSS, JS, PDFs
+    # Why: Long cache for statics; improves load times
+    # When: On responses with matching types
+    ExpiresByType image/jpg "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/pdf "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+</IfModule>
+
+# ==================================================================
+# RATE LIMITING (Optional - requires mod_evasive)
+# ==================================================================
+
+# What: Loads mod_evasive for DoS protection
+# Why: Blocks rapid requests to prevent abuse
+# When: If uncommented; on high request rates
+# LoadModule evasive24_module modules/mod_evasive24.so
+# <IfModule mod_evasive24.c>
+    # What: Sets hash table size for tracking
+    # Why: Manages IP request counts; 2048 is sufficient
+    # When: At startup; used for rate limiting
+    # DOSHashTableSize    2048
+    # What: Limits requests per page (2/sec)
+    # Why: Detects rapid page hits (e.g., bots)
+    # When: Per request; triggers block if exceeded
+    # DOSPageCount        2
+    # What: Limits requests per site (50/sec)
+    # Why: Caps total site hits; prevents floods
+    # When: Per request; triggers block
+    # DOSSiteCount        50
+    # What: Sets page request interval (1s)
+    # Why: Defines time window for page count
+    # When: For rate calculations
+    # DOSPageInterval     1
+    # What: Sets site request interval (1s)
+    # Why: Defines time window for site count
+    # When: For rate calculations
+    # DOSSiteInterval     1
+    # What: Blocks IPs for 600s on violation
+    # Why: Temporarily bans abusive IPs
+    # When: On exceeding rate limits
+    # DOSBlockingPeriod   600
+    # What: Emails admin on blocks
+    # Why: Alerts ops to potential attacks
+    # When: On block events
+    # DOSEmailNotify      admin@your-domain.com
+    # What: Sets log directory for mod_evasive
+    # Why: Stores rate-limiting logs
+    # When: On block events
+    # DOSLogDir           logs
+# </IfModule>
+
+# ==================================================================
+# MOD_SECURITY (Web Application Firewall)
+# ==================================================================
+
+# What: Loads ModSecurity WAF module
+# Why: Blocks malicious requests (e.g., SQLi, XSS)
+# When: If uncommented; inspects all requests
+# LoadModule security2_module modules/mod_security2.so
+# <IfModule security2_module>
+    # What: Loads main ModSecurity config
+    # Why: Defines WAF settings (e.g., detection mode)
+    # When: At startup; applies to all requests
+    # Include conf/modsecurity.conf
+    # What: Loads OWASP Core Rule Set
+    # Why: Blocks common attacks with tested rules
+    # When: Evaluates rules per request
+    # Include conf/owasp-modsecurity-crs/*.conf
+# </IfModule>
